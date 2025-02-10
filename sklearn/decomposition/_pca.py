@@ -402,6 +402,8 @@ class PCA(_BasePCA):
         self,
         n_components=None,
         *,
+        #JACK EDIT
+        custom_mean=None,
         copy=True,
         whiten=False,
         svd_solver="auto",
@@ -412,6 +414,8 @@ class PCA(_BasePCA):
         random_state=None,
     ):
         self.n_components = n_components
+        #JACK EDIT
+        self.custom_mean = custom_mean
         self.copy = copy
         self.whiten = whiten
         self.svd_solver = svd_solver
@@ -558,8 +562,11 @@ class PCA(_BasePCA):
                 f"min(n_samples, n_features)={min(n_samples, n_features)} with "
                 f"svd_solver={self._fit_svd_solver!r}"
             )
-
-        self.mean_ = xp.mean(X, axis=0)
+        #JACK EDIT: SHOULD IT BE SELF?
+        if self.custom_mean is not None:
+            self.mean_ = self.custom_mean
+        else: 
+            self.mean_ = xp.mean(X, axis=0)
         # When X is a scipy sparse matrix, self.mean_ is a numpy matrix, so we need
         # to transform it to a 1D array. Note that this is not the case when X
         # is a scipy sparse array.
@@ -678,6 +685,7 @@ class PCA(_BasePCA):
         # Compute noise covariance using Probabilistic PCA model
         # The sigma2 maximum likelihood (cf. eq. 12.46)
         if n_components < min(n_features, n_samples):
+            #JACK EDIT: SHOULD I CHANGE THIS MEAN?
             self.noise_variance_ = xp.mean(explained_variance_[n_components:])
         else:
             self.noise_variance_ = 0.0
@@ -735,12 +743,18 @@ class PCA(_BasePCA):
         # Center data
         total_var = None
         if issparse(X):
+            #JACK EDIT
+            #I HAVE NOT CHANGED THIS, SO THE CUSTOM MEAN WILL NOT WORK FOR SPARSE ARRAYS
             self.mean_, var = mean_variance_axis(X, axis=0)
             total_var = var.sum() * n_samples / (n_samples - 1)  # ddof=1
             X_centered = _implicit_column_offset(X, self.mean_)
             x_is_centered = False
         else:
-            self.mean_ = xp.mean(X, axis=0)
+            #JACK EDIT
+            if self.custom_mean is not None:
+                self.mean_ = self.custom_mean
+            else:
+                self.mean_ = xp.mean(X, axis=0)
             X_centered = xp.asarray(X, copy=True) if self.copy else X
             X_centered -= self.mean_
             x_is_centered = not self.copy
@@ -817,7 +831,11 @@ class PCA(_BasePCA):
         check_is_fitted(self)
         xp, _ = get_namespace(X)
         X = validate_data(self, X, dtype=[xp.float64, xp.float32], reset=False)
-        Xr = X - self.mean_
+        #JACK EDIT
+        if self.custom_mean is not None:
+            Xr = X - self.custom_mean
+        else:
+            Xr = X - self.mean_
         n_features = X.shape[1]
         precision = self.get_precision()
         log_like = -0.5 * xp.sum(Xr * (Xr @ precision), axis=1)
@@ -845,6 +863,9 @@ class PCA(_BasePCA):
             Average log-likelihood of the samples under the current model.
         """
         xp, _ = get_namespace(X)
+        #JACK EDIT
+        #DO I NEED TO CHANGE THIS TO USE THE NEW MEAN?
+        #I don't think so, as this seems to only refer to the mean log likelihood
         return float(xp.mean(self.score_samples(X)))
 
     def __sklearn_tags__(self):
@@ -857,3 +878,4 @@ class PCA(_BasePCA):
             "covariance_eigh",
         )
         return tags
+
